@@ -8,13 +8,15 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
 var (
-	QueueUrl   = "https://sqs.ap-southeast-1.amazonaws.com/449696992066/testing"
-	BucketName = "mediatek-sync-testing"
-	Region     = "ap-southeast-1"
+	QueueUrl       = "https://sqs.ap-southeast-1.amazonaws.com/449696992066/testing"
+	FromBucketName = "mediatek-sync-testing"
+	ToBucketName   = "mediatek-to-testing"
+	Region         = "ap-southeast-1"
 )
 
 func main() {
@@ -49,8 +51,27 @@ func main() {
 			fmt.Println("error:", err)
 		}
 
-        objectKey := body.Records[0].S3.Object.Key
+		objectKey := body.Records[0].S3.Object.Key
 
-        fmt.Println(objectKey)
 	}
+}
+
+func getObject(s3Client *s3.S3, bucket string, key string) ([]byte, err) {
+	results, err := s3Client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	defer results.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+
+	if _, err := io.Copy(buf, results.Body); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
