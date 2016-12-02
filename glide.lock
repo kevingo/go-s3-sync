@@ -1,0 +1,12 @@
+hash: 4bcc26f53b9cf79c068550e96d7b0b635fab49c0c32ee414d8a78bb55656ae04
+updated: 2016-11-30T13:20:33.070636999+08:00
+imports:
+- name: github.com/aws/aws-sdk-go
+  version: b4916cc32444fcca7ff773d1279b9c556c9cca10
+  subpackages:
+  - aws
+  - aws/awserr
+  - aws/credentials
+- name: github.com/go-ini/ini
+  version: 2ba15ac2dc9cdf88c110ec2dc0ced7fa45f5678c
+testImports: []
