@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	QueueUrl       = "https://sqs.ap-southeast-1.amazonaws.com/449696992066/testing"
-	FromBucketName = "mediatek-sync-testing"
-	ToBucketName   = "mediatek-to-testing"
-	Region         = "ap-southeast-1"
+	QueueUrl       = ""
+	FromBucketName = ""
+	ToBucketName   = ""
+	Region         = ""
 )
 
 func main() {
