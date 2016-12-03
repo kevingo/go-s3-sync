@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 
 	"encoding/json"
@@ -10,13 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
-)
-
-var (
-	QueueUrl       = ""
-	FromBucketName = ""
-	ToBucketName   = ""
-	Region         = ""
 )
 
 func main() {
@@ -52,11 +47,11 @@ func main() {
 		}
 
 		objectKey := body.Records[0].S3.Object.Key
-
+		println(objectKey)
 	}
 }
 
-func getObject(s3Client *s3.S3, bucket string, key string) ([]byte, err) {
+func getObject(s3Client *s3.S3, bucket string, key string) ([]byte, error) {
 	results, err := s3Client.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
@@ -74,4 +69,20 @@ func getObject(s3Client *s3.S3, bucket string, key string) ([]byte, err) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func putObject(s3Client *s3.S3, key string, body []byte) (*s3.PutObjectOutput, error) {
+
+	params := &s3.PutObjectInput{
+		Bucket: aws.String(ToBucketName), // bucket名稱
+		Key:    aws.String(key),          // object key
+		Body:   bytes.NewReader(body),    //要上傳的內容
+	}
+
+	resp, err := s3Client.PutObject(params)
+	if err != nil {
+		panic(err)
+	}
+
+	return resp, err
 }
