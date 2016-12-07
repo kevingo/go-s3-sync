@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"io"
 	"log"
+	"net/url"
 	"os"
 )
 
@@ -28,28 +30,44 @@ func initLogger() *log.Logger {
 func main() {
 	sqsClient := sqsClient()
 	client := s3Client(Region)
-	// chinaClient := s3Client(CNRegion)
 
 	for {
+		log.Println("Start polling message ... ")
 		receive_resp, err := receiveMessage(sqsClient)
-		checkErr(err)
+		logErr(err)
 
 		for _, message := range receive_resp.Messages {
 			b := *message.Body
 
 			var body Body
-			err := json.Unmarshal([]byte(b), &body)
-			checkErr(err)
+			err1 := json.Unmarshal([]byte(b), &body)
+			if err1 != nil {
+				logErr(err1)
+				continue
+			}
 
-			objectKey := body.Records[0].S3.Object.Key
-			logger.Println("Process ", objectKey)
+			key := body.Records[0].S3.Object.Key
+			objectKey, _ := url.QueryUnescape(key)
 
-			file, _ := getObject(client, FromBucketName, objectKey)
-			result, err := s3Uploader(objectKey, file)
-			checkErr(err)
+			file, err2 := getObject(client, FromBucketName, objectKey)
+			if err2 != nil {
+				logErr(err2)
+				continue
+			}
 
-			deleteMessage(sqsClient, message)
-			logger.Println("Success upload file ", result.Location)
+			log.Println("Get " + objectKey + " success")
+
+			result, err3 := s3Uploader(objectKey, file)
+			if err3 != nil {
+				logErr(err3)
+				continue
+			}
+
+			log.Println("Upload " + objectKey + "success")
+			if err1 == nil && err2 == nil && err3 == nil {
+				deleteMessage(sqsClient, message)
+				logger.Println("Success upload file ", result.Location)
+			}
 		}
 	}
 }
@@ -57,9 +75,9 @@ func main() {
 func receiveMessage(svc *sqs.SQS) (*sqs.ReceiveMessageOutput, error) {
 	receiveParams := &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(QueueUrl),
-		MaxNumberOfMessages: aws.Int64(5),  // 一次最多取幾個 message
-		VisibilityTimeout:   aws.Int64(60), // 如果這個 message 沒刪除，下次再被取出來的時間
-		WaitTimeSeconds:     aws.Int64(20), // long polling 方式取，會建立一條長連線並且等在那邊，直到 SQS 收到新 message 回傳給這條連線才中斷
+		MaxNumberOfMessages: aws.Int64(5),
+		VisibilityTimeout:   aws.Int64(3600),
+		WaitTimeSeconds:     aws.Int64(20),
 	}
 
 	receive_resp, err := svc.ReceiveMessage(receiveParams)
@@ -73,8 +91,7 @@ func deleteMessage(svc *sqs.SQS, message *sqs.Message) {
 	}
 	_, err := svc.DeleteMessage(delete_params) // No response returned when successed.
 
-	checkErr(err)
-	log.Println("[Delete message] \nMessage ID: %s has beed deleted.\n\n", *message.MessageId)
+	logErr(err)
 }
 
 func getObject(s3Client *s3.S3, bucket string, key string) ([]byte, error) {
@@ -83,19 +100,27 @@ func getObject(s3Client *s3.S3, bucket string, key string) ([]byte, error) {
 		Key:    aws.String(key),
 	})
 
-	checkErr(err)
+	if err != nil {
+		return nil, err
+	}
+
 	defer results.Body.Close()
 
 	buf := bytes.NewBuffer(nil)
 	if _, err := io.Copy(buf, results.Body); err != nil {
-		checkErr(err)
+		return nil, err
 	}
 
 	return buf.Bytes(), nil
 }
 
 func s3Uploader(key string, body []byte) (*s3manager.UploadOutput, error) {
-	uploader := s3manager.NewUploader(session.New(&aws.Config{Region: aws.String(Region)}))
+	credentials := *credentials.NewStaticCredentials(CNAccessKey, CNSecretKey, "")
+	config := aws.Config{
+		Credentials: &credentials,
+		Region:      aws.String(CNRegion),
+	}
+	uploader := s3manager.NewUploader(session.New(&config))
 	result, err := uploader.Upload(&s3manager.UploadInput{
 		Body:   bytes.NewReader(body),
 		Bucket: aws.String(ToBucketName),
@@ -125,8 +150,8 @@ func sqsClient() *sqs.SQS {
 	return svc
 }
 
-func checkErr(err error) {
+func logErr(err error) {
 	if err != nil {
-		logger.Fatal("ERROR:", err)
+		logger.Println("ERROR:", err)
 	}
 }
