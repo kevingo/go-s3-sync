@@ -30,3 +30,5 @@ _testmain.go
 vendor/
 
 config.go
+configs/
+main
