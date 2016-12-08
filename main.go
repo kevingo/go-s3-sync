@@ -18,12 +18,15 @@ import (
 var logger = initLogger()
 
 func initLogger() *log.Logger {
-	file, err := os.Create("sync.log")
+	file, err := os.OpenFile("sync.log", os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
-		log.Fatalln("fail to create test.log file!")
+		log.Println("fail to create log file!")
 	}
-	logger := log.New(file, "", log.LstdFlags|log.Llongfile)
-
+	writers := []io.Writer{
+		file,
+		os.Stdout,
+	}
+	logger := log.New(io.MultiWriter(writers...), "", log.Ldate|log.Ltime|log.Lshortfile)
 	return logger
 }
 
@@ -49,13 +52,15 @@ func main() {
 			key := body.Records[0].S3.Object.Key
 			objectKey, _ := url.QueryUnescape(key)
 
+			logger.Println("Start process " + objectKey)
+
 			file, err2 := getObject(client, FromBucketName, objectKey)
 			if err2 != nil {
 				logErr(err2)
 				continue
 			}
 
-			log.Println("Get " + objectKey + " success")
+			logger.Println("Get " + objectKey + " success")
 
 			result, err3 := s3Uploader(objectKey, file)
 			if err3 != nil {
@@ -63,7 +68,6 @@ func main() {
 				continue
 			}
 
-			log.Println("Upload " + objectKey + "success")
 			if err1 == nil && err2 == nil && err3 == nil {
 				deleteMessage(sqsClient, message)
 				logger.Println("Success upload file ", result.Location)
